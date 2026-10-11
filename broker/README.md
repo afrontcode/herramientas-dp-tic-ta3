@@ -2,6 +2,8 @@
 
 ### 1. Ejecución del Broker
 
+El servicio/programa Docker debe estar funcionando antes de ejecutar los siguientes comandos:
+
 ```powershell
 docker compose up -d
 docker ps
