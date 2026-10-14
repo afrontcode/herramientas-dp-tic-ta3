@@ -1,6 +1,6 @@
 services:
   emqx:
-    image: emqx/emqx:latest
+    image: emqx/emqx:6.3.1
     container_name: emqx_broker
     restart: always
     ports:
@@ -8,8 +8,17 @@ services:
       - "8883:8883"   # MQTT Seguro con TLS/SSL
       - "8083:8083"   # MQTT sobre WebSockets
       - "18083:18083" # Panel de administración EMQX
+    environment:
+      # Listener TLS (8883) con los certificados del laboratorio
+      EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__CERTFILE: /opt/emqx/etc/certs/lab/server.crt
+      EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__KEYFILE: /opt/emqx/etc/certs/lab/server.key
+      EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__CACERTFILE: /opt/emqx/etc/certs/lab/ca.crt
     volumes:
-      - ../certs:/opt/emqx/etc/certs:ro
+      # Se monta en una subcarpeta para no reemplazar los certificados por defecto de EMQX
+      # "z" permite el acceso con SELinux (Fedora/RHEL); se ignora en Windows y macOS
+      - ./certs:/opt/emqx/etc/certs/lab:ro,z
+      # Persiste usuarios, contraseña de admin y configuración del panel
+      - emqx_data:/opt/emqx/data
 
 
 
@@ -41,5 +50,6 @@ services:
       - grafana_data:/var/lib/grafana
 
 volumes:
+  emqx_data:
   influxdb_data:
   grafana_data:
