@@ -20,8 +20,6 @@ services:
       # Persiste usuarios, contraseña de admin y configuración del panel
       - emqx_data:/opt/emqx/data
 
-
-
   influxdb:
     image: influxdb:2.7
     container_name: iot_influxdb
@@ -34,20 +32,40 @@ services:
       DOCKER_INFLUXDB_INIT_PASSWORD: Cambiar_Clave_Influx_2026
       DOCKER_INFLUXDB_INIT_ORG: iot
       DOCKER_INFLUXDB_INIT_BUCKET: sensores
-      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: CAMBIAR_TOKEN_LARGO_DE_LABORATORIO
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUX_TOKEN:-CAMBIAR_TOKEN_LARGO_DE_LABORATORIO}
     volumes:
       - influxdb_data:/var/lib/influxdb2
 
+  # Puente MQTT -> InfluxDB: se suscribe a iot/+/mediciones y guarda cada lectura
+  telegraf:
+    image: telegraf:1.34
+    container_name: iot_telegraf
+    restart: unless-stopped
+    depends_on:
+      - emqx
+      - influxdb
+    environment:
+      TELEGRAF_MQTT_USERNAME: ${TELEGRAF_MQTT_USERNAME:-telegraf}
+      TELEGRAF_MQTT_PASSWORD: ${TELEGRAF_MQTT_PASSWORD:-}
+      INFLUX_TOKEN: ${INFLUX_TOKEN:-CAMBIAR_TOKEN_LARGO_DE_LABORATORIO}
+    volumes:
+      - ./telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro,z
+
   grafana:
-    image: grafana/grafana-oss:latest
+    image: grafana/grafana-oss:13.0.2
     container_name: iot_grafana
     restart: unless-stopped
     ports:
       - "3000:3000"
     depends_on:
       - influxdb
+    environment:
+      INFLUX_TOKEN: ${INFLUX_TOKEN:-CAMBIAR_TOKEN_LARGO_DE_LABORATORIO}
     volumes:
       - grafana_data:/var/lib/grafana
+      # Fuente de datos InfluxDB y dashboard cargados automáticamente al iniciar
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro,z
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro,z
 
 volumes:
   emqx_data:
