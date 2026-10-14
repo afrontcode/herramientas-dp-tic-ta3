@@ -6,7 +6,7 @@ Implementar una arquitectura IoT funcional que reproduzca el flujo básico **adq
 
 - Simular un nodo IoT en Python que genere lecturas de un sensor tipo DHT22.
 - Transmitir los datos mediante el protocolo MQTT hacia un broker local EMQX desplegado con Docker.
-- Verificar la recepción de los datos con clientes MQTT (MQTTX / MQTT Explorer y el cliente WebSocket de EMQX).
+- Verificar la recepción de los datos con un cliente MQTT (WebSocket Client integrado en EMQX).
 - Aplicar las recomendaciones adicionales de la guía: timestamp, múltiples sensores, seguridad (autenticación y TLS/SSL) y visualización con Grafana.
 
 ## 2. Arquitectura
@@ -19,7 +19,7 @@ flowchart LR
         T["Telegraf<br/>(consumidor MQTT)"]
         I[("InfluxDB 2.7<br/>bucket: sensores")]
         G["Grafana<br/>Dashboard"]
-        C["Clientes de verificación<br/>MQTTX / WebSocket Client"]
+        C["Cliente de verificación<br/>WebSocket Client (EMQX)"]
     end
 
     S -- "PUBLISH iot/&lt;sensor_id&gt;/mediciones<br/>TLS :8883 · QoS 1" --> B
@@ -85,20 +85,11 @@ Se fijó la versión `emqx/emqx:6.3.1` y se añadió un volumen persistente (`em
 
 ### Etapa 3: Verificación de la transmisión de datos
 
-La recepción de los mensajes se verificó con dos clientes suscritos al tópico comodín `iot/#`, que agrupa a los tres sensores:
+La recepción de los mensajes se verificó con el **WebSocket Client** integrado en el panel de EMQX (*Diagnostics Tools*), conectado a `localhost` por el puerto 8083 con el usuario `explorer` y suscrito al tópico comodín `iot/#`, que agrupa a los tres sensores. En la sección *Received* se observan los mensajes JSON de los tres sensores llegando cada 5 segundos.
 
-1. **MQTTX** (cliente MQTT de escritorio).
-2. **WebSocket Client** integrado en el panel de EMQX (Diagnostics Tools), conectado por el puerto 8083.
+![Figura 3. Datos recibidos en el WebSocket Client de EMQX](../capturas/4-WEBSOCKET-CLIENT.png)
 
-En ambos se observan los mensajes JSON de los tres sensores llegando cada 5 segundos.
-
-![Figura 3. Datos recibidos en MQTTX](../capturas/1-MQTT-EXPLORER.png)
-
-*Figura 3. MQTTX suscrito a `iot/#` mostrando las lecturas publicadas por el nodo IoT.*
-
-![Figura 4. Datos recibidos en el WebSocket Client de EMQX](../capturas/4-WEBSOCKET-CLIENT.png)
-
-*Figura 4. WebSocket Client de EMQX suscrito a `iot/#`: mensajes de `sensor_01`, `sensor_02` y `sensor_03` con QoS 1.*
+*Figura 3. WebSocket Client de EMQX suscrito a `iot/#`: mensajes de `sensor_01`, `sensor_02` y `sensor_03` con QoS 1.*
 
 ### Etapa 4: Recomendaciones adicionales
 
@@ -112,13 +103,13 @@ Además de la seguridad (sección 4), se implementaron las extensiones sugeridas
 
 El dashboard *IoT – Sensores DHT22 simulados* muestra el valor actual de cada variable por ubicación y su evolución en el tiempo, con mínimo, máximo y promedio, actualizándose cada 5 segundos.
 
-![Figura 5. Dashboard de Grafana – valores actuales y temperatura](../capturas/5-GRAFANA.png)
+![Figura 4. Dashboard de Grafana – valores actuales y temperatura](../capturas/5-GRAFANA.png)
 
-*Figura 5. Dashboard de Grafana: valores actuales de temperatura, humedad y presión por ubicación, y gráfica de temperatura.*
+*Figura 4. Dashboard de Grafana: valores actuales de temperatura, humedad y presión por ubicación, y gráfica de temperatura.*
 
-![Figura 6. Dashboard de Grafana – humedad y presión](../capturas/6-GRAFANA2.png)
+![Figura 5. Dashboard de Grafana – humedad y presión](../capturas/6-GRAFANA2.png)
 
-*Figura 6. Gráficas de humedad y presión por ubicación con sus estadísticas.*
+*Figura 5. Gráficas de humedad y presión por ubicación con sus estadísticas.*
 
 ## 4. Seguridad: TLS y autenticación
 
@@ -130,7 +121,7 @@ Siguiendo las recomendaciones de la guía, se protegió el broker en dos niveles
 |---------|---------|
 | `sensor_python` | Nodo IoT (`sensor.py`) |
 | `telegraf` | Telegraf (puente hacia InfluxDB) |
-| `explorer` | Clientes de verificación (MQTTX / WebSocket) |
+| `explorer` | Cliente de verificación (WebSocket Client) |
 
 Las contraseñas se guardan en archivos `.env` excluidos del repositorio, y en su lugar se versionan plantillas `.env.example`.
 
@@ -162,7 +153,7 @@ El puerto 1883 sin cifrar se mantuvo para el laboratorio (uso de Telegraf dentro
 ## 6. Conclusiones
 
 - Se implementó y verificó el flujo completo de una solución IoT: el nodo simulado genera lecturas, las publica por MQTT, el broker EMQX las distribuye a los suscriptores y finalmente se almacenan en InfluxDB y se visualizan en Grafana.
-- El modelo **publicación/suscripción** de MQTT desacopla a productores y consumidores: el nodo IoT no conoce a sus suscriptores, y fue posible añadir MQTTX, el WebSocket Client y Telegraf sin modificar el sensor. El uso de tópicos jerárquicos (`iot/<sensor_id>/mediciones`) y comodines (`#`, `+`) permite suscribirse a uno o a todos los sensores.
+- El modelo **publicación/suscripción** de MQTT desacopla a productores y consumidores: el nodo IoT no conoce a sus suscriptores, y fue posible añadir el WebSocket Client y Telegraf como suscriptores sin modificar el sensor. El uso de tópicos jerárquicos (`iot/<sensor_id>/mediciones`) y comodines (`#`, `+`) permite suscribirse a uno o a todos los sensores.
 - **Docker** facilitó desplegar todos los servicios con un único comando y de forma reproducible; fijar las versiones de las imágenes evitó diferencias entre los equipos del grupo.
 - La seguridad no viene activada por defecto: EMQX acepta conexiones anónimas y sin cifrar hasta que se configuran la autenticación y TLS. Ambas medidas son imprescindibles en un entorno real, al igual que mantener las credenciales fuera del código fuente.
 - Los datos simulados permiten validar toda la arquitectura sin hardware; reemplazarlos por un sensor DHT22 físico en una Raspberry Pi solo requeriría cambiar la función de lectura, manteniendo el mismo formato de mensaje y el resto del flujo.
